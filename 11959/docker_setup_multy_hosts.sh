@@ -35,6 +35,7 @@ move_opts () {
 }
 
 docker_restart () {
+    echo -e "\nRestarting Docker daemon.\n"
     ssh -t -t -oStrictHostKeyChecking=no -i "$RSA_KEY" "$USER@$1" "bash -c '
         sudo service docker restart
     '"
@@ -44,4 +45,5 @@ for host in $IPS; do
     docker_update $host
     copy_opts $host
     move_opts $host
+    docker_restart $host
 done
