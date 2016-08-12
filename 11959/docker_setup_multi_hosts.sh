@@ -5,6 +5,7 @@ USER="ubuntu"
 RSA_KEY="my-cluster.pem"
 
 docker_update () {
+
     echo -e "\nInstalling Docker to $1\n"
     ssh -t -t -oStrictHostKeyChecking=no -i "$RSA_KEY" "$USER@$1" "bash -c '
     	sudo apt-get update && curl -sSL https://get.docker.com/ | sh
@@ -27,6 +28,7 @@ copy_opts () {
 }
 
 move_opts () {
+
     ssh -t -t -oStrictHostKeyChecking=no -i "$RSA_KEY" "$USER@$1" "bash -c '
         sudo mv /home/$USER/docker /etc/default/docker
         sudo mv /home/$USER/docker_host.sh /etc/profile.d/docker_host.sh
@@ -34,6 +36,7 @@ move_opts () {
 }
 
 docker_restart () {
+
     echo -e "\nRestarting Docker daemon.\n"
     ssh -t -t -oStrictHostKeyChecking=no -i "$RSA_KEY" "$USER@$1" "bash -c '
         sudo service docker restart
