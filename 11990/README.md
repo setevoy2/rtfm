@@ -8,3 +8,4 @@ two Consul node in Private network;
 
 Post Title: AWS: CloudFormation – шаблон для VPC, EC2, NAT и Internet Gateway
 Post URL: https://rtfm.co.ua/?p=11990
+ 
