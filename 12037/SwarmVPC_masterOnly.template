@@ -1,0 +1,398 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "AWS CloudFormation Template Docker Swarm cluster in VPC",
+
+  "Parameters" : {
+
+    "VPCCidrBlock" : {
+      "Description" : "VPC CIDR IP addresses block",
+      "Type" : "String",
+      "MinLength": "9",
+      "MaxLength": "18",
+      "Default": "11.0.0.0/16",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+    },
+
+    "SSHLocation" : {
+      "Description" : "The IP address range that can be used to SSH to the EC2 instances",
+      "Type": "String",
+      "MinLength": "9",
+      "MaxLength": "18",
+      "Default": "0.0.0.0/0",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+    },
+
+    "PubNetCIDR": {
+      "Description" : "The IP address range tin VPC block for Public subnet",
+      "Type": "String",
+      "Default": "11.0.1.0/24",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+    },
+
+    "PrivNetCIDR": {
+      "Description" : "The IP address range tin VPC block for Private subnet",
+      "Type": "String",
+      "Default": "11.0.2.0/24",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+    },
+
+    "InstanceType" : {
+      "Description" : "Swarm hosts EC2 instance type",
+      "Type" : "String",
+      "Default" : "t2.large",
+      "AllowedValues" : [ "t2.nano", "t2.micro", "t2.small", "t2.large" ],
+      "ConstraintDescription" : "must be a valid EC2 instance type."
+    }
+  },
+
+  "Resources" : {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "VPCCidrBlock"
+        },
+        "EnableDnsSupport": "false",
+        "EnableDnsHostnames": "false",
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": {
+              "Ref": "AWS::StackId"
+            }
+          }
+        ]
+      }
+    },
+    "MasterSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "GroupDescription": "Enable HTTP access via port 80 and SSH access",
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "80",
+            "ToPort": "80",
+            "CidrIp": "0.0.0.0/0"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "22",
+            "ToPort": "22",
+            "CidrIp": {
+              "Ref": "SSHLocation"
+            }
+          }
+        ]
+      }
+    },
+    "PubSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Ref": "PubNetCIDR"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "0",
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        }
+      }
+    },
+    "PrivSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Ref": "PrivNetCIDR"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "0",
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        }
+      }
+    },
+    "PubNetIGW": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {}
+    },
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "PubNetIGW"
+        }
+      }
+    },
+    "NatEIP": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc"
+      }
+    },
+    "NatGW": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatEIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PubSubnet"
+        }
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      }
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "PubNetIGW"
+        }
+      }
+    },
+    "PrivateRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NatGW"
+        }
+      }
+    },
+    "PublicRouteAssociate": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "PubSubnet"
+        }
+      }
+    },
+    "PrivateRouteAssociate": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "PrivSubnet"
+        }
+      }
+    },
+    "SwarmMaster0EIP": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc"
+      }
+    },
+    "CfnUser": {
+      "Type": "AWS::IAM::User",
+      "Properties": {
+        "Path": "/",
+        "Policies": [
+          {
+            "PolicyName": "root",
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": "cloudformation:DescribeStackResource",
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "HostKeys": {
+      "Type": "AWS::IAM::AccessKey",
+      "Properties": {
+        "UserName": {
+          "Ref": "CfnUser"
+        }
+      }
+    },
+    "SwarmMaster0": {
+      "DependsOn": "SwarmMaster0EIP",
+      "Type": "AWS::EC2::Instance",
+      "Metadata": {
+        "AWS::CloudFormation::Init": {
+          "config": {
+            "files": {
+              "/etc/profile.d/docker_host.sh": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "export DOCKER_HOST=", { "Ref" : "SwarmMaster0EIP" }, ":2375"
+                    ]
+                  ]
+                },
+                "mode": "000644",
+                "owner": "root",
+                "group": "root"
+              }
+            }
+          }
+        }
+      },
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "SwarmMaster0"
+          }
+        ],
+        "InstanceType": {
+          "Ref": "InstanceType"
+        },
+        "ImageId": "ami-a7412ad4",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "0",
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "KeyName": "my-cluster",
+        "NetworkInterfaces": [
+          {
+            "DeleteOnTermination": "true",
+            "DeviceIndex": "0",
+            "SubnetId": {
+              "Ref": "PubSubnet"
+            },
+            "GroupSet": [
+              {
+                "Ref": "MasterSecurityGroup"
+              }
+            ]
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash\n",
+
+                "echo \"nameserver 8.8.8.8\" >> /etc/resolv.conf\n",
+
+                "apt-get update\n",
+                "apt-get -y install python-setuptools\n",
+
+                "easy_install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz\n",
+
+                "error_exit () {\n",
+                "  cfn-signal -e 1 -r \"$1\" '", { "Ref" : "SwarmMaster0WaitHandle" }, "'\n",
+                "  exit 1\n",
+                "}\n",
+
+                "cfn-init -v -s ", { "Ref": "AWS::StackName" },
+                " -r SwarmMaster0 ",
+                " --access-key ", { "Ref": "HostKeys" },
+                " --secret-key ", { "Fn::GetAtt": [ "HostKeys", "SecretAccessKey" ] },
+                " --region ", { "Ref": "AWS::Region" },
+                " || error_exit 'Failed to run cfn-init'\n",
+
+                "curl -sSL https://get.docker.com/ | sh\n",
+
+                "echo DOCKER_OPTS=-H $(ip a s eth0 | grep -w inet | cut -d\" \" -f 6 | cut -d\"/\" -f1):2375 >> /etc/default/docker\n",
+
+                "cfn-signal -e 0 -r \"SwarmMaster0 setup has completed\" '", { "Ref": "SwarmMaster0WaitHandle" },
+                "'\n"
+              ]
+            ]
+          }
+        }
+      }
+    },
+
+    "SwarmMaster0WaitHandle": {
+      "Type": "AWS::CloudFormation::WaitConditionHandle"
+    },
+
+    "SwarmMaster0WaitCondition": {
+      "Type": "AWS::CloudFormation::WaitCondition",
+      "DependsOn": "SwarmMaster0",
+      "Properties": {
+        "Handle": {
+          "Ref": "SwarmMaster0WaitHandle"
+        },
+        "Timeout": "1600"
+      }
+    },
+
+    "SwarmMaster0AssociateEIP": {
+      "DependsOn": "SwarmMaster0",
+      "Type": "AWS::EC2::EIPAssociation",
+      "Properties": {
+        "EIP": {
+          "Ref": "SwarmMaster0EIP"
+        },
+        "InstanceId": {
+          "Ref": "SwarmMaster0"
+        }
+      }
+    }
+  },
+
+  "Outputs" : {
+    "VPCCIDR" : {
+      "Value" : { "Fn::GetAtt" : ["VPC", "CidrBlock"] },
+      "Description" : "VPC CIDR IP addresses block"
+    }
+  }
+}
