@@ -4,13 +4,8 @@
   "parameters": {
     "skuName": {
       "type": "string",
-      "defaultValue": "F1",
+      "defaultValue": "S1",
       "allowedValues": [
-        "F1",
-        "D1",
-        "B1",
-        "B2",
-        "B3",
         "S1",
         "S2",
         "S3",
@@ -106,7 +101,8 @@
     "sqlserverName": "[concat(resourceGroup().name, '-sql-server')]",
     "sqlDBbasename": "[concat(resourceGroup().name, '-DB-database')]",
     "sqlCMSbasename": "[concat(resourceGroup().name, '-CMS-database')]",
-    "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'storage')]"
+    "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'storage')]",
+    "slotName": "-staging"
   },
   "resources": [
     {
@@ -223,6 +219,18 @@
               "type": "SQLServer"
             }
           }
+        },
+        {
+          "apiVersion": "2015-08-01",
+            "name": "[variables('slotName')]",
+            "type": "slots",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/Sites', variables('webSiteName'))]"
+            ],
+            "properties": {},
+            "resources": [
+            ]
         }
       ]
     },
