@@ -3,10 +3,10 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "administratorLogin": {
-      "value": "jageradmin"
+      "value": "sqladmin"
     },
     "administratorLoginPassword": {		
-      "value": "Beebu4fam6ai"
+      "value": "StrongSQLPasswordHere"
     },
     "storageAccountType": {
       "value": "Standard_GRS"
