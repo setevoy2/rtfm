@@ -1,0 +1,350 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "AWS CloudFormation Template two EC2 in VPC",
+
+  "Parameters" : {
+
+    "BastionAMIid": {
+      "Description" : "OpenBSD AMI ID",
+      "Type" : "String",
+      "Default":  "ami-170b6064"
+    },
+
+    "ZeusAMIid": {
+      "Description" : "CoreOS AMI ID",
+      "Type" : "String",
+      "Default":  "ami-068bfe75"
+    },
+
+    "KeyName": {
+      "Description" : "Name of an existing EC2 KeyPair to enable SSH access to the instance",
+      "Type": "AWS::EC2::KeyPair::KeyName",
+      "ConstraintDescription" : "must be the name of an existing EC2 KeyPair.",
+      "Default":  "my-cluster"
+    },
+
+    "VPCCidrBlock" : {
+      "Description" : "VPC CIDR IP addresses block",
+      "Type" : "String",
+      "MinLength": "9",
+      "MaxLength": "18",
+      "Default": "12.0.0.0/16",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+    },
+
+    "SSHLocation" : {
+      "Description" : "The IP address range that can be used to SSH to the EC2 instances",
+      "Type": "String",
+      "MinLength": "9",
+      "MaxLength": "18",
+      "Default": "0.0.0.0/0",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+    },
+
+    "PubNetCIDR": {
+      "Description" : "The IP address range tin VPC block for Public subnet",
+      "Type": "String",
+      "Default": "12.0.1.0/24",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+    },
+
+    "PrivNetCIDR": {
+      "Description" : "The IP address range tin VPC block for Private subnet",
+      "Type": "String",
+      "Default": "12.0.2.0/24",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+    },
+
+    "InstanceType" : {
+      "Description" : "Swarm hosts EC2 instance type",
+      "Type" : "String",
+      "Default" : "t2.nano",
+      "AllowedValues" : [ "t2.nano", "t2.micro", "t2.small" ],
+      "ConstraintDescription" : "must be a valid EC2 instance type."
+    }
+  },
+
+  "Resources" : {
+
+    "VPC" : {
+      "Type" : "AWS::EC2::VPC",
+      "Properties" : {
+        "CidrBlock" : { "Ref" : "VPCCidrBlock" },
+        "EnableDnsSupport" : "false",
+        "EnableDnsHostnames" : "false",
+        "Tags" : [
+          { "Key" : "Name", "Value" : "Migrate-VPC"},
+          { "Key" : "stack_name", "Value" : { "Ref" : "AWS::StackName"} },
+          { "Key" : "rtfm_env", "Value" : "migrate" }
+        ]
+      }
+    },
+
+    "BastionSecurityGroup": {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "VpcId" : { "Ref": "VPC"},
+        "GroupDescription" : "Enable HTTP access via port 80 and SSH access",
+        "SecurityGroupIngress" : [
+          {"IpProtocol" : "tcp", "FromPort" : "80", "ToPort" : "80", "CidrIp" : "0.0.0.0/0"},
+          {"IpProtocol" : "tcp", "FromPort" : "22", "ToPort" : "22", "CidrIp" : { "Ref" : "SSHLocation"}}
+        ],
+        "Tags" : [
+          { "Key" : "Name", "Value" : "Migrate-BastionSecurityGroup"},
+          { "Key" : "stack_name", "Value" : { "Ref" : "AWS::StackName"} },
+          { "Key" : "rtfm_env", "Value" : "migrate" }
+        ]
+      }
+    },
+
+    "ZeusSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "VpcId" : { "Ref" : "VPC" },
+        "GroupDescription" : "Enable SSH access via port 22",
+        "SecurityGroupIngress" : [ {
+            "IpProtocol": "tcp",
+            "FromPort": "0",
+            "ToPort": "65535",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "0",
+            "ToPort": "65535",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags" : [
+          { "Key" : "Name", "Value" : "Migrate-ZeusSecurityGroup" },
+          { "Key" : "stack_name", "Value" : { "Ref" : "AWS::StackName"} },
+          { "Key" : "rtfm_env", "Value" : "migrate" }
+        ]
+      }
+    },
+
+    "PubSubnet" : {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "VPC"},
+        "CidrBlock": { "Ref": "PubNetCIDR"},
+        "AvailabilityZone": { "Fn::Select" : [ "0", { "Fn::GetAZs" : "" } ]},
+        "Tags" : [
+          { "Key" : "Name", "Value" : "Migrate-PubNet"},
+          { "Key" : "stack_name", "Value" : { "Ref" : "AWS::StackName"} },
+          { "Key" : "rtfm_env", "Value" : "migrate" }
+        ]
+      }
+    },
+
+    "PrivSubnet" : {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "VPC"},
+        "CidrBlock": { "Ref": "PrivNetCIDR"},
+        "AvailabilityZone": { "Fn::Select" : [ "0", { "Fn::GetAZs" : "" } ]},
+        "Tags" : [
+          { "Key" : "Name", "Value" : "Migrate-PrivNet" },
+          { "Key" : "stack_name", "Value" : { "Ref" : "AWS::StackName"} },
+          { "Key" : "rtfm_env", "Value" : "migrate" }
+        ]
+      }
+    },
+
+    "PubNetIGW" : {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags" : [
+          { "Key" : "Name", "Value" : "Migrate-PubNetIGW" },
+          { "Key" : "stack_name", "Value" : { "Ref" : "AWS::StackName"} },
+          { "Key" : "rtfm_env", "Value" : "migrate" }
+        ]
+      }
+    },
+
+    "AttachGateway" : {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "InternetGatewayId": { "Ref": "PubNetIGW" }
+      }
+    },
+
+    "NatEIP": {
+      "Type" : "AWS::EC2::EIP",
+      "Properties" : {
+        "Domain" : "vpc"
+      }
+    },
+
+    "NatGW": {
+      "Type" : "AWS::EC2::NatGateway",
+      "Properties" : {
+        "AllocationId" : { "Fn::GetAtt" : ["NatEIP", "AllocationId"]},
+        "SubnetId" : { "Ref": "PubSubnet"}
+      }
+    },
+
+    "PublicRouteTable" : {
+      "Type" : "AWS::EC2::RouteTable",
+      "Properties" : {
+        "VpcId": { "Ref": "VPC" },
+        "Tags" : [
+          { "Key" : "Name", "Value" : "Migrate-PublicRouteTable" },
+          { "Key" : "stack_name", "Value" : { "Ref" : "AWS::StackName"} },
+          { "Key" : "rtfm_env", "Value" : "migrate" }
+        ]
+      }
+    },
+
+    "PrivateRouteTable" : {
+      "Type" : "AWS::EC2::RouteTable",
+      "Properties" : {
+        "VpcId": { "Ref": "VPC" },
+        "Tags" : [
+          { "Key" : "Name", "Value" : "Migrate-PrivateRouteTable" },
+          { "Key" : "stack_name", "Value" : { "Ref" : "AWS::StackName"} },
+          { "Key" : "rtfm_env", "Value" : "migrate" }
+        ]
+      }
+    },
+
+    "PublicRoute" : {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": { "Ref": "PublicRouteTable" },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": { "Ref": "PubNetIGW" }
+      }
+    },
+
+    "PrivateRoute" : {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": { "Ref": "PrivateRouteTable" },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": { "Ref": "NatGW" }
+      }
+    },
+
+    "PublicRouteAssociate": {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties" : {
+        "RouteTableId" : { "Ref": "PublicRouteTable"},
+        "SubnetId" : { "Ref": "PubSubnet"}
+      }
+    },
+
+    "PrivateRouteAssociate": {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties" : {
+        "RouteTableId" : { "Ref": "PrivateRouteTable"},
+        "SubnetId" : { "Ref": "PrivSubnet"}
+      }
+    },
+
+    "BastionEIP": {
+      "Type" : "AWS::EC2::EIP",
+      "Properties" : { "Domain" : "vpc" }
+    },
+
+    "BastionEC2": {
+      "DependsOn" : "BastionEIP",
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "InstanceType" : { "Ref" : "InstanceType" },
+        "ImageId" : { "Ref" : "BastionAMIid"},
+        "AvailabilityZone": { "Fn::Select" : [ "0", { "Fn::GetAZs" : "" } ]},
+        "KeyName": { "Ref" : "KeyName" },
+        "NetworkInterfaces" : [ {
+          "DeleteOnTermination": "true",
+          "DeviceIndex" : "0",
+          "SubnetId": {"Ref": "PubSubnet"},
+          "GroupSet": [ {"Ref": "BastionSecurityGroup"} ]
+        }],
+        "Tags" : [
+          { "Key" : "Name", "Value" : "Migrate-BastionEC2" },
+          { "Key" : "stack_name", "Value" : { "Ref" : "AWS::StackName"} },
+          { "Key" : "rtfm_env", "Value" : "migrate" }
+        ]
+      }
+    },
+
+    "BastionAssociateEIP": {
+      "DependsOn" : "BastionEC2",
+      "Type": "AWS::EC2::EIPAssociation",
+      "Properties": {
+        "EIP": { "Ref": "BastionEIP"},
+        "InstanceId": { "Ref": "BastionEC2"}
+      }
+    },
+
+    "ZeusEC2": {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "InstanceType" : { "Ref" : "InstanceType" },
+        "ImageId" : { "Ref" : "ZeusAMIid" },
+        "AvailabilityZone": { "Fn::Select" : [ "0", { "Fn::GetAZs" : "" } ]},
+        "KeyName": { "Ref" : "KeyName" },
+        "NetworkInterfaces" : [ {
+          "DeleteOnTermination": "true",
+          "DeviceIndex" : "0",
+          "SubnetId": {"Ref": "PrivSubnet"},
+          "GroupSet": [ {"Ref": "ZeusSecurityGroup"} ]
+        }],
+        "Tags" : [
+          { "Key" : "Name", "Value" : "MigrateZeusEC2"},
+          { "Key" : "stack_name", "Value" : { "Ref" : "AWS::StackName"}},
+          { "Key" : "rtfm_env", "Value" : "migrate"}
+        ]
+      }
+    }
+  },
+
+  "Outputs" : {
+    "VPCID" : {
+      "Value" : { "Ref" : "VPC"},
+      "Description" : "VPC ID"
+    },
+    "VPCCIDR" : {
+      "Value" : { "Fn::GetAtt" : ["VPC", "CidrBlock"] },
+      "Description" : "VPC CIDR IP addresses block"
+    },
+    "BastionID" : {
+      "Value" : { "Ref" : "BastionEC2"},
+      "Description": "Bastion EC2 instance ID"
+    },
+    "BastionPublicDNS" : {
+      "Value" : { "Fn::GetAtt" : ["BastionEC2", "PublicDnsName"] },
+      "Description": "Bastion public DNS name"
+    },
+    "BastionPublicIP" : {
+      "Value" : { "Fn::GetAtt" : ["BastionEC2", "PublicIp"] },
+      "Description": "Bastion public DNS IP address"
+    },
+    "BastionPrivateIP" : {
+      "Value" : { "Fn::GetAtt" : ["BastionEC2", "PrivateIp"] },
+      "Description": "Bastion private DNS IP address"
+    },
+    "ZeusID" : {
+      "Value" : { "Ref" : "ZeusEC2" },
+      "Description": "Zeus EC2 instance ID"
+    },
+    "ZeusPrivateDNS" : {
+      "Value" : { "Fn::GetAtt" : ["ZeusEC2", "PrivateDnsName"] },
+      "Description": "Zeus private DNS name "
+    },
+    "ZeusPrivateI" : {
+      "Value" : { "Fn::GetAtt" : ["ZeusEC2", "PrivateIp"] },
+      "Description": "Zeus private IP address"
+    }
+  }
+}
+
