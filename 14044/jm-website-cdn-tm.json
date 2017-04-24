@@ -1,0 +1,199 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "topFQDN": {
+      "type": "string",
+      "metadata": {
+        "description": "To used used for CDN as Origin Host Header and Custom Domain name."
+      }
+    },
+    "publishTMname": {
+      "type": "string",
+      "metadata": {
+        "description": "Publish Traffic Manager name."
+      }
+    },
+    "previewTMname": {
+      "type": "string",
+      "metadata": {
+        "description": "Preview Traffic Manager name."
+      }
+    },
+    "publishUniqueDnsName": {
+      "type": "string",
+      "metadata": {
+        "description": "Relative DNS name for the traffic manager profile, resulting FQDN will be <uniqueDnsName>.trafficmanager.net, must be globally unique."
+      }
+    },
+    "previewUniqueDnsName": {
+      "type": "string",
+      "metadata": {
+        "description": "Relative DNS name for the traffic manager profile, resulting FQDN will be <uniqueDnsName>.trafficmanager.net, must be globally unique."
+      }
+    },
+    "publishGreenNodeDNSfqdn": {
+      "type": "string",
+      "metadata": {
+        "description": "URL to Green Nodes IP for Publish Traffic Manager endpoint."
+      }
+    },
+    "publishBlueNodeDNSfqdn": {
+      "type": "string",
+      "metadata": {
+        "description": "URL to Blue Nodes IP for Publish Traffic Manager endpoint."
+      }
+    },
+    "previewGreenNodeDNSfqdn": {
+      "type": "string",
+      "metadata": {
+        "description": "URL to Green Nodes IP for Publish Traffic Manager endpoint."
+      }
+    },
+    "previewBlueNodeDNSfqdn": {
+      "type": "string",
+      "metadata": {
+        "description": "URL to Blue Nodes IP for Publish Traffic Manager endpoint."
+      }
+    }
+  },
+  "variables": {
+    "publishGreenEndpointName": "[concat(parameters('publishUniqueDnsName'), '-green')]",
+    "publishBlueEndpointName": "[concat(parameters('publishUniqueDnsName'), '-blue')]",
+    "previewGreenEndpointName": "[concat(parameters('previewUniqueDnsName'), '-green')]",
+    "previewBlueEndpointName": "[concat(parameters('previewUniqueDnsName'), '-blue')]",
+
+    "CDNprofileName": "[concat(resourceGroup().name, '-cdn-profile')]",
+    "CDNendpointName": "[concat(resourceGroup().name,'-cdn-endpoint')]",
+    "CDNoriginUrl": "[concat(resourceGroup().name,'-cdn-url')]",
+    "CDNCustomDomainName": "[concat(variables('CDNprofileName'),'/', variables('CDNendpointName'), '/customdomain')]",
+
+    "publishTMurl": "[concat(parameters('publishUniqueDnsName'), '.trafficmanager.net')]"
+  },
+  "resources": [
+    {
+      "apiVersion": "2015-11-01",
+      "type": "Microsoft.Network/trafficManagerProfiles",
+      "name": "[parameters('publishTMname')]",
+      "location": "global",
+      "properties": {
+        "profileStatus": "Enabled",
+        "trafficRoutingMethod": "Weighted",
+        "dnsConfig": {
+          "relativeName": "[parameters('publishUniqueDnsName')]",
+          "ttl": 30
+        },
+        "monitorConfig": {
+          "protocol": "http",
+          "port": 80,
+          "path": "/"
+        },
+        "endpoints": [
+          {
+            "name": "[variables('publishGreenEndpointName')]",
+            "type": "Microsoft.Network/trafficManagerProfiles/externalEndpoints",
+            "properties": {
+              "target": "[parameters('publishGreenNodeDNSfqdn')]",
+              "endpointStatus": "Enabled",
+              "weight": 1
+            }
+          },
+          {
+            "name": "[variables('publishBlueEndpointName')]",
+            "type": "Microsoft.Network/trafficManagerProfiles/externalEndpoints",
+            "properties": {
+              "target": "[parameters('publishBlueNodeDNSfqdn')]",
+              "endpointStatus": "Disabled",
+              "weight": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2015-11-01",
+      "type": "Microsoft.Network/trafficManagerProfiles",
+      "name": "[parameters('previewTMname')]",
+      "location": "global",
+      "properties": {
+        "profileStatus": "Enabled",
+        "trafficRoutingMethod": "Weighted",
+        "dnsConfig": {
+          "relativeName": "[parameters('previewUniqueDnsName')]",
+          "ttl": 30
+        },
+        "monitorConfig": {
+          "protocol": "http",
+          "port": 80,
+          "path": "/"
+        },
+        "endpoints": [
+          {
+            "name": "[variables('previewGreenEndpointName')]",
+            "type": "Microsoft.Network/trafficManagerProfiles/externalEndpoints",
+            "properties": {
+              "target": "[parameters('previewGreenNodeDNSfqdn')]",
+              "endpointStatus": "Enabled",
+              "weight": 1
+            }
+          },
+          {
+            "name": "[variables('previewBlueEndpointName')]",
+            "type": "Microsoft.Network/trafficManagerProfiles/externalEndpoints",
+            "properties": {
+              "target": "[parameters('previewBlueNodeDNSfqdn')]",
+              "endpointStatus": "Disabled",
+              "weight": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "[variables('CDNprofileName')]",
+      "type": "Microsoft.Cdn/profiles",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2015-06-01",
+      "properties": {
+        "sku": {
+          "name": "Premium"
+        }
+      }
+    },
+    {
+      "apiVersion": "2015-06-01",
+      "dependsOn": [
+        "[concat('Microsoft.Cdn/profiles/', variables('CDNprofileName'))]"
+      ],
+      "location": "[resourceGroup().location]",
+      "name": "[concat(variables('CDNprofileName'),'/', variables('CDNendpointName'))]",
+      "type": "Microsoft.Cdn/profiles/endpoints",
+      "properties": {
+        "originHostHeader": "[parameters('topFQDN')]",
+        "isHttpAllowed": true,
+        "isHttpsAllowed": true,
+        "origins": [
+          {
+            "name": "[variables('publishTMurl')]",
+            "properties": {
+              "hostName": "[variables('publishTMurl')]",
+              "httpPort": 80,
+              "httpsPort": 443
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Cdn/profiles/endpoints/customdomains",
+      "name": "[variables('CDNCustomDomainName')]",
+      "apiVersion": "2016-04-02",
+      "properties": {
+        "hostName": "[parameters('topFQDN')]"
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Cdn/profiles/', variables('CDNprofileName'), '/endpoints/', variables('CDNendpointName'))]"
+      ]
+    }
+  ]
+}
