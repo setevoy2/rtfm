@@ -1,0 +1,704 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "SAStoken": {
+      "type": "securestring"
+    },
+    "environment": {
+      "type": "string",
+      "metadata": {
+        "description": "dev, qa, staging, prod"
+      },
+      "allowedValues": [
+        "dev",
+        "qa",
+        "staging",
+        "production"
+      ]
+    },
+    "dnsNamePrefix": {
+      "type": "string",
+      "metadata": {
+        "description": "Unique DNS Name for the Public IP used to access the Virtual Machine."
+      }
+    },
+    "envDNSfqdn": {
+      "type": "string",
+      "metadata": {
+        "description": "Unique DNS Name for the Public IP used to access the Virtual Machine."
+      }
+    },
+    "storageAccountKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Storage account key for utils."
+      }
+    },
+    "storageAccountName": {
+      "type": "string",
+      "defaultValue": "utils",
+      "metadata": {
+        "description": "Storage account name for utils."
+      }
+    },
+    "adminUsername": {
+      "type": "string",
+      "defaultValue": "jmadmin",
+      "metadata": {
+        "description": "Admin username on all VMs."
+      }
+    },
+    "adminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Admin password on all VMs."
+      }
+    },
+    "sshPublicKey": {
+      "type": "string",
+      "metadata": {
+        "description": "SSH public key that will be included on all nodes. The OpenSSH public key can be generated with tools like ssh-keygen on Linux or OS X."
+      }
+    },
+    "masterCount": {
+      "type": "int",
+      "defaultValue": 3,
+      "allowedValues": [
+        1,
+        3,
+        5
+      ],
+      "metadata": {
+        "description": "The number of Swarm managers for the cluster."
+      }
+    },
+    "nodesCount": {
+      "type": "int",
+      "defaultValue": 3,
+      "metadata": {
+        "description": "The number of swarm nodes for the cluster.  This value can be from 1 to 100"
+      },
+      "minValue": 1,
+      "maxValue": 100
+    },
+    "diskSize": {
+      "type": "int",
+      "defaultValue": 100,
+      "metadata": {
+        "description": "Disk size to ba attached."
+      }
+    }
+  },
+  "variables": {
+
+    "masterCount": "[parameters('masterCount')]",
+    "nodesCount": "[parameters('nodesCount')]",
+
+    "vNetName": "[concat(resourceGroup().name,'-net')]",
+    "masterSubNetName": "[concat(resourceGroup().name,'-master-subnet')]",
+    "nodesSubNetName": "[concat(resourceGroup().name,'-nodes-subnet')]",
+
+    "addressPrefixMasters": "10.0.0.0/16",
+    "addressPrefixNodes": "192.168.0.0/16",
+    "subnetPrefixMasters": "10.0.0.0/24",
+    "subnetPrefixNodes": "192.168.0.0/24",
+
+    "masterNicName": "[concat(resourceGroup().name,'-master-nic')]",
+    "masterIPConfigName": "[concat(resourceGroup().name,'-master-ip')]",
+    "masterVMSSname": "[concat(resourceGroup().name,'-master-vmss')]",
+    "masterLBName": "[concat(resourceGroup().name,'-master-lb')]",
+    "masterLBID": "[resourceId('Microsoft.Network/loadBalancers',variables('masterLBName'))]",
+    "masterFEPoolName": "[concat(resourceGroup().name,'-master-fe-pool')]",
+    "masterFEPoolID": "[concat(variables('masterLBID'),'/frontendIPConfigurations/',variables('masterFEPoolName'))]",
+    "masterBEPoolName": "[concat(resourceGroup().name,'-master-be-pool')]",
+    "masterBEPoolID": "[concat(variables('masterLBID'),'/backendAddressPools/',variables('masterBEPoolName'))]",
+    "masterLBProbeName": "masterLBProbe",
+    "masterLBProbeID": "[concat(variables('masterLBID'),'/probes/',variables('masterLBProbeName'))]",
+    "masterNATPoolName": "[concat(resourceGroup().name,'-master-nat-pool')]",
+    "masterNSGname": "[concat(resourceGroup().name,'-master-nsg')]",
+
+    "nodesVMSSname": "[concat(resourceGroup().name,'-nodes-vmss')]",
+    "nodesLBName": "[concat(resourceGroup().name,'-nodes-lb')]",
+    "nodesIPConfigName": "[concat(resourceGroup().name,'-nodes-ip')]",
+    "nodesFEPoolName": "[concat(resourceGroup().name,'-nodes-fe-pool')]",
+    "nodesFEPoolID": "[concat(variables('nodesLBID'),'/frontendIPConfigurations/',variables('nodesFEPoolName'))]",
+    "nodesBEPoolName": "[concat(resourceGroup().name,'-nodes-be-pool')]",
+    "nodesBEPoolID": "[concat(variables('nodesLBID'),'/backendAddressPools/',variables('nodesBEPoolName'))]",
+    "nodesLBID": "[resourceId('Microsoft.Network/loadBalancers',variables('nodesLBName'))]",
+
+    "nodesLBProbeWebsite": "nodesLBProbeWebsite",
+    "nodesLBProbeWebsitePreview": "nodesLBProbeWebsitePreview",
+    "nodesLBProbeContact": "nodesLBProbeContact",
+    "nodesLBProbeTransform": "nodesLBProbeTransform",
+    "nodesLBProbeSSL": "nodesLBProbeSSL",
+    "nodesLBProbeTransformPreview": "nodesLBProbeTransformPreview",
+
+    "nodesLBProbeWebsiteID": "[concat(variables('nodesLBID'),'/probes/',variables('nodesLBProbeWebsite'))]",
+    "nodesLBProbeWebsitePreviewID": "[concat(variables('nodesLBID'),'/probes/',variables('nodesLBProbeWebsitePreview'))]",
+    "nodesLBProbeContactID": "[concat(variables('nodesLBID'),'/probes/',variables('nodesLBProbeContact'))]",
+    "nodesLBProbeTransformID": "[concat(variables('nodesLBID'),'/probes/',variables('nodesLBProbeTransform'))]",
+    "nodesLBProbeTransformPreviewID": "[concat(variables('nodesLBID'),'/probes/',variables('nodesLBProbeTransformPreview'))]",
+    "nodesLBProbeSSLID": "[concat(variables('nodesLBID'),'/probes/',variables('nodesLBProbeSSL'))]",
+
+    "nodesLBRuleWebsite": "nodesLBRuleWebsite",
+    "nodesLBRuleWebsitePreview": "nodesLBRuleWebsitePreview",
+    "nodesLBRuleContact": "nodesLBRuleContact",
+    "nodesLBRuleTransform": "nodesLBRuleTransform",
+    "nodesLBRuleTransformPreview": "nodesLBRuleTransformPreview",
+
+    "nodesLBRuleSSL": "nodesLBRuleSSL",
+
+    "nodesNicName": "[concat(resourceGroup().name,'-nodes-nic')]",
+    "nodesNSGname": "[concat(resourceGroup().name,'-nodes-nsg')]",
+
+    "osType": {
+      "publisher": "Canonical",
+      "offer": "UbuntuServer",
+      "sku": "16.04.0-LTS",
+      "version": "latest"
+    },
+    "imageReference": "[variables('osType')]"
+  },
+  "resources": [
+    {
+      "apiVersion": "2015-06-15",
+      "type": "Microsoft.Network/virtualNetworks",
+      "name": "[variables('vNetName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[variables('masterNSGname')]"
+      ],
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[variables('addressPrefixMasters')]",
+            "[variables('addressPrefixNodes')]"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[variables('masterSubNetName')]",
+            "properties": {
+              "addressPrefix": "[variables('subnetPrefixMasters')]",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('MasterNSGname'))]"
+              }
+            }
+          },
+          {
+            "name": "[variables('nodesSubNetName')]",
+            "properties": {
+              "addressPrefix": "[variables('subnetPrefixNodes')]",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('NodesNSGname'))]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2015-06-15",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "name": "[variables('MasterNSGname')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "NSG - Remote Access"
+      },
+      "properties": {
+        "securityRules": [
+          {
+            "name": "AllowSSHAll",
+            "properties": {
+              "description": "Allow SSH",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 100,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2015-01-01",
+      "name": "[variables('NodesNSGname')]",
+      "type": "Microsoft.Resources/deployments",
+      "properties": {
+        "mode": "incremental",
+        "templateLink": {
+          "uri": "[concat('https://utils.blob.core.windows.net/templates/jm-website-nsg-', parameters('environment'), '.json', parameters('SAStoken'))]",
+          "contentVersion": "1.0.0.0"
+        },
+        "parameters": {
+          "NodesNSGname":{"value": "[variables('NodesNSGname')]"}
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "[variables('masterIPConfigName')]",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2016-09-01",
+      "properties": {
+        "publicIPAllocationMethod": "Static",
+        "dnsSettings": {
+          "domainNameLabel": "[concat(parameters('dnsNamePrefix'), '-master-ip')]"
+        }
+      }
+    },
+   {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "[variables('nodesIPConfigName')]",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2016-09-01",
+      "properties": {
+        "publicIPAllocationMethod": "Static",
+        "dnsSettings": {
+          "domainNameLabel": "[concat(parameters('dnsNamePrefix'), '-nodes-ip')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Network/loadBalancers",
+      "name": "[variables('masterLBName')]",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2016-09-01",
+      "dependsOn": [
+        "[concat('Microsoft.Network/publicIPAddresses/', variables('masterIPConfigName'))]"
+      ],
+      "properties": {
+        "frontendIPConfigurations": [
+          {
+            "name": "[variables('masterFEPoolName')]",
+            "properties": {
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses',variables('masterIPConfigName'))]"
+              }
+            }
+          }
+        ],
+        "backendAddressPools": [
+          {
+            "name": "[variables('masterBEPoolName')]"
+          }
+        ],
+        "inboundNatPools": [
+          {
+            "name": "[variables('masterNATPoolName')]",
+            "properties": {
+              "frontendIPConfiguration": {
+                "id": "[variables('masterFEPoolID')]"
+              },
+              "protocol": "tcp",
+              "frontendPortRangeStart": 2200,
+              "frontendPortRangeEnd": 2220,
+              "backendPort": 22
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/loadBalancers",
+      "name": "[variables('nodesLBName')]",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2016-09-01",
+      "dependsOn": [
+        "[concat('Microsoft.Network/publicIPAddresses/', variables('nodesIPConfigName'))]"
+      ],
+      "properties": {
+        "frontendIPConfigurations": [
+          {
+            "name": "[variables('nodesFEPoolName')]",
+            "properties": {
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses',variables('nodesIPConfigName'))]"
+              }
+            }
+          }
+        ],
+        "backendAddressPools": [
+          {
+            "name": "[variables('nodesBEPoolName')]"
+          }
+        ],
+        "loadBalancingRules": [
+          {
+            "name": "[variables('nodesLBRuleWebsite')]",
+            "properties": {
+              "frontendIPConfiguration": {
+                "id": "[variables('nodesFEPoolID')]"
+              },
+              "backendAddressPool": {
+                "id": "[variables('nodesBEPoolID')]"
+              },
+              "probe": {
+                "id": "[variables('nodesLBProbeWebsiteID')]"
+              },
+              "protocol": "tcp",
+              "frontendPort": 80,
+              "backendPort": 80,
+              "enableFloatingIP": false
+            }
+          },
+          {
+            "name": "[variables('nodesLBRuleWebsitePreview')]",
+            "properties": {
+              "frontendIPConfiguration": {
+                "id": "[variables('nodesFEPoolID')]"
+              },
+              "backendAddressPool": {
+                "id": "[variables('nodesBEPoolID')]"
+              },
+              "probe": {
+                "id": "[variables('nodesLBProbeWebsitePreviewID')]"
+              },
+              "protocol": "tcp",
+              "frontendPort": 8080,
+              "backendPort": 8080,
+              "enableFloatingIP": false
+            }
+          },
+          {
+            "name": "[variables('nodesLBRuleContact')]",
+            "properties": {
+              "frontendIPConfiguration": {
+                "id": "[variables('nodesFEPoolID')]"
+              },
+              "backendAddressPool": {
+                "id": "[variables('nodesBEPoolID')]"
+              },
+              "probe": {
+                "id": "[variables('nodesLBProbeContactID')]"
+              },
+              "protocol": "tcp",
+              "frontendPort": 4004,
+              "backendPort": 4004,
+              "enableFloatingIP": false
+            }
+          },
+          {
+            "name": "[variables('nodesLBRuleTransform')]",
+            "properties": {
+              "frontendIPConfiguration": {
+                "id": "[variables('nodesFEPoolID')]"
+              },
+              "backendAddressPool": {
+                "id": "[variables('nodesBEPoolID')]"
+              },
+              "probe": {
+                "id": "[variables('nodesLBProbeTransformID')]"
+              },
+              "protocol": "tcp",
+              "frontendPort": 3003,
+              "backendPort": 3003,
+              "enableFloatingIP": false
+            }
+          },
+          {
+            "name": "[variables('nodesLBRuleTransformPreview')]",
+            "properties": {
+              "frontendIPConfiguration": {
+                "id": "[variables('nodesFEPoolID')]"
+              },
+              "backendAddressPool": {
+                "id": "[variables('nodesBEPoolID')]"
+              },
+              "probe": {
+                "id": "[variables('nodesLBProbeTransformPreviewID')]"
+              },
+              "protocol": "tcp",
+              "frontendPort": 3004,
+              "backendPort": 3004,
+              "enableFloatingIP": false
+            }
+          },
+          {
+            "name": "[variables('nodesLBRuleSSL')]",
+            "properties": {
+              "frontendIPConfiguration": {
+                "id": "[variables('nodesFEPoolID')]"
+              },
+              "backendAddressPool": {
+                "id": "[variables('nodesBEPoolID')]"
+              },
+              "probe": {
+                "id": "[variables('nodesLBProbeSSLID')]"
+              },
+              "protocol": "tcp",
+              "frontendPort": 443,
+              "backendPort": 443,
+              "enableFloatingIP": false
+            }
+          }
+        ],
+        "probes": [
+          {
+            "name": "[variables('nodesLBProbeWebsite')]",
+            "properties": {
+              "protocol": "tcp",
+              "port": 80,
+              "intervalInSeconds": 15,
+              "numberOfProbes": 5
+            }
+          },
+          {
+            "name": "[variables('nodesLBProbeWebsitePreview')]",
+            "properties": {
+              "protocol": "tcp",
+              "port": 8080,
+              "intervalInSeconds": 15,
+              "numberOfProbes": 5
+            }
+          },
+          {
+            "name": "[variables('nodesLBProbeContact')]",
+            "properties": {
+              "protocol": "tcp",
+              "port": 4004,
+              "intervalInSeconds": 15,
+              "numberOfProbes": 5
+            }
+          },
+          {
+            "name": "[variables('nodesLBProbeTransform')]",
+            "properties": {
+              "protocol": "tcp",
+              "port": 3003,
+              "intervalInSeconds": 15,
+              "numberOfProbes": 5
+            }
+          },
+          {
+            "name": "[variables('nodesLBProbeTransformPreview')]",
+            "properties": {
+              "protocol": "tcp",
+              "port": 3004,
+              "intervalInSeconds": 15,
+              "numberOfProbes": 5
+            }
+          },
+          {
+            "name": "[variables('nodesLBProbeSSL')]",
+            "properties": {
+              "protocol": "tcp",
+              "port": 443,
+              "intervalInSeconds": 15,
+              "numberOfProbes": 5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachineScaleSets",
+      "name": "[variables('masterVMSSname')]",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2016-04-30-preview",
+      "dependsOn": [
+        "[concat('Microsoft.Network/virtualNetworks/', variables('vNetName'))]",
+        "[resourceId('Microsoft.Network/loadBalancers',variables('masterLBName'))]"
+      ],
+      "sku": {
+        "name": "Standard_A1",
+        "tier": "Standard",
+        "capacity": "[parameters('masterCount')]"
+      },
+      "properties": {
+        "overprovision": "false",
+        "upgradePolicy": {
+          "mode": "Manual"
+        },
+        "virtualMachineProfile": {
+          "storageProfile": {
+            "osDisk": {
+              "createOption": "FromImage"
+            },
+            "imageReference": "[variables('imageReference')]"
+          },
+          "osProfile": {
+            "computerNamePrefix": "[uniqueString(resourceGroup().id)]",
+            "adminUsername": "[parameters('adminUsername')]",
+            "adminPassword": "[parameters('adminPassword')]",
+            "linuxConfiguration": {
+              "disablePasswordAuthentication": "false",
+              "ssh": {
+                "publicKeys": [
+                {
+                  "path": "[concat('/home/', parameters('adminUsername'), '/.ssh/authorized_keys')]",
+                  "keyData": "[parameters('sshPublicKey')]"
+                }
+                ]
+              }
+            }
+          },
+          "networkProfile": {
+            "networkInterfaceConfigurations": [
+              {
+                "name": "[variables('masterNicName')]",
+                "properties": {
+                  "primary": "true",
+                  "ipConfigurations": [
+                    {
+                      "name": "[variables('masterIPConfigName')]",
+                      "properties": {
+                        "subnet": {
+                          "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/virtualNetworks/', variables('vNetName'), '/subnets/', variables('masterSubNetName'))]"
+                        },
+                        "loadBalancerBackendAddressPools": [
+                          {
+                            "id": "[variables('masterBEPoolID')]"
+                          }
+                        ],
+                        "loadBalancerInboundNatPools": [
+                          {
+                            "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/loadBalancers/', variables('masterLBName'), '/inboundNatPools/', variables('masterNATPoolName'))]"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "extensionProfile": {
+            "extensions": [
+              {
+                "name": "MasterSwarmInstall",
+                "properties": {
+                  "publisher": "Microsoft.Azure.Extensions",
+                  "type": "CustomScript",
+                  "typeHandlerVersion": "2.0",
+                  "autoUpgradeMinorVersion": false,
+                  "settings": {
+                    "fileUris": [
+                      "https://utils.blob.core.windows.net/scripts/swarm_master_provision.sh",
+                      "https://utils.blob.core.windows.net/scripts/docker_cleanup.sh"
+                    ],
+                    "commandToExecute": "[concat('bash swarm_master_provision.sh ', '10.0.0.4 ', parameters('environment'))]"
+                  },
+                  "protectedSettings": {
+                    "storageAccountName": "[parameters('storageAccountName')]",
+                    "storageAccountKey": "[parameters('storageAccountKey')]"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachineScaleSets",
+      "name": "[variables('nodesVMSSname')]",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2016-04-30-preview",
+      "dependsOn": [
+        "[concat('Microsoft.Network/virtualNetworks/', variables('vNetName'))]",
+        "[resourceId('Microsoft.Network/loadBalancers',variables('nodesLBName'))]",
+        "[resourceId('Microsoft.Compute/virtualMachineScaleSets',variables('masterVMSSname'))]"
+      ],
+      "sku": {
+        "name": "Standard_A1",
+        "tier": "Standard",
+        "capacity": "[parameters('nodesCount')]"
+      },
+      "properties": {
+        "overprovision": "false",
+        "upgradePolicy": {
+          "mode": "Manual"
+        },
+        "virtualMachineProfile": {
+          "storageProfile": {
+            "osDisk": {
+              "createOption": "FromImage"
+            },
+            "imageReference": "[variables('imageReference')]",
+            "dataDisks": [
+              {
+                  "lun": 0,
+                  "createOption": "Empty",
+                  "caching": "None",
+                  "diskSizeGB": "[parameters('diskSize')]"
+              }
+          ]
+          },
+          "osProfile": {
+            "computerNamePrefix": "[uniqueString(resourceGroup().id)]",
+            "adminUsername": "[parameters('adminUsername')]",
+            "adminPassword": "[parameters('adminPassword')]",
+            "linuxConfiguration": {
+              "disablePasswordAuthentication": "false",
+              "ssh": {
+                "publicKeys": [
+                {
+                  "path": "[concat('/home/', parameters('adminUsername'), '/.ssh/authorized_keys')]",
+                  "keyData": "[parameters('sshPublicKey')]"
+                }
+                ]
+              }
+            }
+          },
+          "networkProfile": {
+            "networkInterfaceConfigurations": [
+              {
+                "name": "[variables('nodesNicName')]",
+                "properties": {
+                  "primary": "true",
+                  "ipConfigurations": [
+                    {
+                      "name": "[variables('nodesIPConfigName')]",
+                      "properties": {
+                        "subnet": {
+                          "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/virtualNetworks/', variables('vNetName'), '/subnets/', variables('nodesSubNetName'))]"
+                        },
+                        "loadBalancerBackendAddressPools": [
+                          {
+                            "id": "[variables('nodesBEPoolID')]"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "extensionProfile": {
+            "extensions": [
+              {
+                "name": "NodesSwarmInstall",
+                "properties": {
+                  "publisher": "Microsoft.Azure.Extensions",
+                  "type": "CustomScript",
+                  "typeHandlerVersion": "2.0",
+                  "autoUpgradeMinorVersion": false,
+                  "settings": {
+                    "fileUris": [
+                      "https://utils.blob.core.windows.net/scripts/swarm_nodes_provision.sh"
+                    ],
+                    "commandToExecute": "[concat('bash swarm_nodes_provision.sh ', '10.0.0.4 ', parameters('environment'))]"
+                  },
+                  "protectedSettings": {
+                    "storageAccountName": "[parameters('storageAccountName')]",
+                    "storageAccountKey": "[parameters('storageAccountKey')]"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+
+  }
+}
