@@ -1,0 +1,459 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "AWS CloudFormation Template EC2",
+
+  "Parameters" : {
+
+    "VPCCIDRBlock": {
+      "Description": "VPC CidrBlock",
+      "Type": "String",
+      "Default": "10.0.0.0/16"
+    },
+
+    "PublicSubnetCIDR": {
+      "Description": "Public Subnet CIDR",
+      "Type": "String",
+      "Default": "10.0.1.0/24"
+    },
+
+    "PrivateSubnetCIDR": {
+      "Description": "Private Subnet CIDR",
+      "Type": "String",
+      "Default": "10.0.129.0/24"
+    },
+
+    "ENV": {
+      "Description": "Environment type. rtfm-dev or rtfm-production.",
+      "Type": "String",
+      "Default": "rtfm-dev"
+    },
+
+    "AvalabilityZone": {
+      "Description": "Avalability Zone for all resources",
+      "Type": "String",
+      "Default": "eu-west-1a"
+    },
+
+    "HomeAllowLocation": {
+      "Description": "The IP address range that can be used to SSH to the EC2 instances",
+      "Type": "String",
+      "MinLength": "9",
+      "MaxLength": "18",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+    },
+
+    "KeyName": {
+      "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instance",
+      "Type": "AWS::EC2::KeyPair::KeyName",
+      "ConstraintDescription": "must be the name of an existing EC2 KeyPair.",
+      "Default": "rtfm-dev"
+    },
+
+    "AMIID": {
+      "Description": "Debian AMI ID",
+      "Type": "String",
+      "Default": "ami-cc5aa0b5"
+    },
+
+    "BastionInstanceType": {
+      "Description": "Bastion EC2 instance type",
+      "Type": "String",
+      "Default": "t2.nano",
+      "AllowedValues": [
+        "t2.nano",
+        "t2.micro",
+        "t2.small"
+      ],
+      "ConstraintDescription": "Must be a valid EC2 instance type."
+    },
+
+    "ServicesInstanceType": {
+      "Description": "Bastion EC2 instance type",
+      "Type": "String",
+      "Default": "t2.micro",
+      "AllowedValues": [
+        "t2.nano",
+        "t2.micro",
+        "t2.small"
+      ],
+      "ConstraintDescription": "Must be a valid EC2 instance type."
+    },
+
+    "DBInstanceType": {
+      "Description": "Bastion EC2 instance type",
+      "Type": "String",
+      "Default": "t2.nano",
+      "AllowedValues": [
+        "t2.nano",
+        "t2.micro",
+        "t2.small"
+      ],
+      "ConstraintDescription": "Must be a valid EC2 instance type."
+    },
+
+    "BastionEBSID": {
+      "Description": "Existing EBS volume with Bastion/NGINX data",
+      "Type": "String",
+      "Default": "vol-0fc9af657fd7c35c9"
+    },
+
+    "ServicesEBSID": {
+      "Description": "Existing EBS volume with Services data",
+      "Type": "String",
+      "Default": "vol-03e393869e1b03cb7"
+    },
+
+    "DBEBSID": {
+      "Description": "Existing EBS volume with DB data",
+      "Type": "String",
+      "Default": "vol-0301aba1a28e0c3b5"
+    }
+
+  },
+
+  "Resources" : {
+
+    "VPC" : {
+      "Type" : "AWS::EC2::VPC",
+      "Properties" : {
+        "CidrBlock" : {"Ref" : "VPCCIDRBlock"},
+        "Tags" : [
+          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "vpc"] ] } },
+          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+        ]
+      }
+    },
+
+    "PublicSubnet" : {
+      "Type" : "AWS::EC2::Subnet",
+      "Properties" : {
+        "VpcId" : { "Ref" : "VPC" },
+        "CidrBlock" : {"Ref" : "PublicSubnetCIDR"},
+        "AvailabilityZone" : {"Ref" : "AvalabilityZone"},
+        "Tags" : [
+          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "public-net"] ] } },
+          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+        ]
+      }
+    },
+
+    "PrivateSubnet" : {
+      "Type" : "AWS::EC2::Subnet",
+      "Properties" : {
+        "VpcId" : { "Ref" : "VPC" },
+        "CidrBlock" : {"Ref" : "PrivateSubnetCIDR"},
+        "AvailabilityZone" : {"Ref" : "AvalabilityZone"},
+        "Tags" : [
+          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "private-net"] ] } },
+          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+        ]
+      }
+    },
+
+    "InternetGateway" : {
+      "Type" : "AWS::EC2::InternetGateway",
+      "Properties" : {
+        "Tags" : [
+          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "igw"] ] } },
+          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+        ]
+      }
+    },
+
+    "AttachGateway" : {
+       "Type" : "AWS::EC2::VPCGatewayAttachment",
+       "Properties" : {
+         "VpcId" : { "Ref" : "VPC" },
+         "InternetGatewayId" : { "Ref" : "InternetGateway" }
+       }
+    },
+
+    "IPAddress" : {
+      "Type" : "AWS::EC2::EIP",
+      "Properties" : {
+        "Domain" : "vpc"
+      }
+    },
+
+    "BastionIPAddress" : {
+      "Type" : "AWS::EC2::EIP",
+      "Properties" : {
+        "Domain" : "vpc"
+      }
+    },
+
+    "NAT" : {
+      "DependsOn" : "IPAddress",
+      "Type" : "AWS::EC2::NatGateway",
+      "Properties" : {
+        "AllocationId" : { "Fn::GetAtt" : ["IPAddress", "AllocationId"]},
+        "SubnetId" : { "Ref" : "PublicSubnet"},
+        "Tags" : [
+          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "natgw"] ] } },
+          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+        ]
+      }
+    },
+
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "Tags" : [
+          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "public-route"] ] } },
+          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+        ]
+      }
+    },
+
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+
+    "PublicSubnetOneRouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "Tags" : [
+          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "private-route"] ] } },
+          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+        ]
+      }
+    },
+
+    "PrivateRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NAT"
+        }
+      }
+    },
+
+    "PrivateSubnetOneRouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+
+    "BastionSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "Tags" : [
+          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "bastion-sg"] ] } },
+          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+        ],
+        "VpcId" : {"Ref" : "VPC"},
+        "GroupDescription" : "Enable SSH, HTTP/S, ICMP access from home",
+        "SecurityGroupIngress" : [
+
+          {
+            "IpProtocol" : "tcp",
+            "FromPort" : "22",
+            "ToPort" : "22",
+            "CidrIp" : { "Ref" : "HomeAllowLocation"}
+          },
+
+          {
+            "IpProtocol" : "tcp",
+            "FromPort" : "80",
+            "ToPort" : "80",
+            "CidrIp" : "0.0.0.0/0"
+          },
+
+          {
+            "IpProtocol" : "tcp",
+            "FromPort" : "443",
+            "ToPort" : "443",
+            "CidrIp" : "0.0.0.0/0"
+          },
+
+          {
+            "IpProtocol" : "icmp",
+            "FromPort" : "8",
+            "ToPort" : "-1",
+            "CidrIp" : { "Ref" : "HomeAllowLocation"}
+          }
+
+        ]
+      }
+    },
+
+    "ServicesSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "Tags" : [
+          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "services-sg"] ] } },
+          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+        ],
+        "VpcId" : {"Ref" : "VPC"},
+        "GroupDescription" : "Enable SSH access from Bastion",
+        "SecurityGroupIngress" : [
+
+          {
+            "IpProtocol" : "tcp",
+            "FromPort" : "22",
+            "ToPort" : "22",
+            "SourceSecurityGroupId" : { "Ref" : "BastionSecurityGroup" }
+          }
+
+        ]
+      }
+    },
+
+    "DBSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "Tags" : [
+          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "db-sg"] ] } },
+          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+        ],
+        "VpcId" : {"Ref" : "VPC"},
+        "GroupDescription" : "Enable SSH access from Bastion",
+        "SecurityGroupIngress" : [
+
+          {
+            "IpProtocol" : "tcp",
+            "FromPort" : "22",
+            "ToPort" : "22",
+            "SourceSecurityGroupId" : { "Ref" : "BastionSecurityGroup" }
+          },
+
+          {
+            "IpProtocol" : "tcp",
+            "FromPort" : "22",
+            "ToPort" : "22",
+            "SourceSecurityGroupId" : { "Ref" : "ServicesSecurityGroup" }
+          }
+
+        ]
+      }
+    },
+
+    "BastionEC2Instance" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "Tags" : [
+          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "bastion"] ] } },
+          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+        ],
+        "InstanceType" : { "Ref" : "BastionInstanceType" },
+        "SecurityGroupIds" : [
+          {
+            "Ref": "BastionSecurityGroup"
+          }
+        ],
+        "KeyName" : { "Ref" : "KeyName" },
+        "ImageId" : { "Ref" : "AMIID"  },
+        "AvailabilityZone": {"Ref" : "AvalabilityZone"},
+        "SubnetId": { "Ref" : "PublicSubnet" },
+        "Volumes" : [
+          {
+           "VolumeId" : { "Ref" : "BastionEBSID" },
+           "Device" : "/dev/xvdb"
+          }
+        ]
+      }
+    },
+
+    "ServicesEC2Instance" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "Tags" : [
+          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "services"] ] } },
+          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+        ],
+        "InstanceType" : { "Ref" : "ServicesInstanceType" },
+        "SecurityGroupIds" : [
+          {
+            "Ref": "ServicesSecurityGroup"
+          }
+        ],
+        "KeyName" : { "Ref" : "KeyName" },
+        "ImageId" : { "Ref" : "AMIID"  },
+        "AvailabilityZone": {"Ref" : "AvalabilityZone"},
+        "SubnetId": { "Ref" : "PrivateSubnet" },
+        "Volumes" : [
+          {
+           "VolumeId" : { "Ref" : "ServicesEBSID" },
+           "Device" : "/dev/xvdb"
+          }
+      ]
+      }
+    },
+
+    "DBEC2Instance" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "Tags" : [
+          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "db"] ] } },
+          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+        ],
+        "InstanceType" : { "Ref" : "DBInstanceType" },
+        "SecurityGroupIds" : [
+          {
+            "Ref": "DBSecurityGroup"
+          }
+        ],
+        "KeyName" : { "Ref" : "KeyName" },
+        "ImageId" : { "Ref" : "AMIID"  },
+        "AvailabilityZone": {"Ref" : "AvalabilityZone"},
+        "SubnetId": { "Ref" : "PrivateSubnet" },
+        "Volumes" : [
+          {
+           "VolumeId" : { "Ref" : "DBEBSID" },
+           "Device" : "/dev/xvdb"
+          }
+        ]
+      }
+    },
+
+    "BastionEIPAssociation" : {
+      "Type": "AWS::EC2::EIPAssociation",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "BastionIPAddress",
+            "AllocationId"
+          ]
+         },
+        "InstanceId": {"Ref" : "BastionEC2Instance"}
+      }
+    }
+
+  }
+}
+
