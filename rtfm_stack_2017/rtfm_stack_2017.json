@@ -70,7 +70,7 @@
     },
 
     "ServicesInstanceType": {
-      "Description": "Bastion EC2 instance type",
+      "Description": "Services EC2 instance type",
       "Type": "String",
       "Default": "t2.micro",
       "AllowedValues": [
@@ -82,7 +82,7 @@
     },
 
     "DBInstanceType": {
-      "Description": "Bastion EC2 instance type",
+      "Description": "DB EC2 instance type",
       "Type": "String",
       "Default": "t2.nano",
       "AllowedValues": [
@@ -120,8 +120,8 @@
       "Properties" : {
         "CidrBlock" : {"Ref" : "VPCCIDRBlock"},
         "Tags" : [
-          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "vpc"] ] } },
-          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+          { "Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "vpc"] ] } },
+          { "Key" : "Env", "Value" : {"Ref" : "ENV"} }
         ]
       }
     },
@@ -133,8 +133,8 @@
         "CidrBlock" : {"Ref" : "PublicSubnetCIDR"},
         "AvailabilityZone" : {"Ref" : "AvalabilityZone"},
         "Tags" : [
-          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "public-net"] ] } },
-          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+          { "Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "public-net"] ] } },
+          { "Key" : "Env", "Value" : {"Ref" : "ENV"} }
         ]
       }
     },
@@ -146,8 +146,8 @@
         "CidrBlock" : {"Ref" : "PrivateSubnetCIDR"},
         "AvailabilityZone" : {"Ref" : "AvalabilityZone"},
         "Tags" : [
-          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "private-net"] ] } },
-          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+          { "Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "private-net"] ] } },
+          { "Key" : "Env", "Value" : {"Ref" : "ENV"} }
         ]
       }
     },
@@ -156,8 +156,8 @@
       "Type" : "AWS::EC2::InternetGateway",
       "Properties" : {
         "Tags" : [
-          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "igw"] ] } },
-          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+          { "Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "igw"] ] } },
+          { "Key" : "Env", "Value" : {"Ref" : "ENV"} }
         ]
       }
     },
@@ -191,8 +191,8 @@
         "AllocationId" : { "Fn::GetAtt" : ["IPAddress", "AllocationId"]},
         "SubnetId" : { "Ref" : "PublicSubnet"},
         "Tags" : [
-          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "natgw"] ] } },
-          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+          { "Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "natgw"] ] } },
+          { "Key" : "Env", "Value" : {"Ref" : "ENV"} }
         ]
       }
     },
@@ -202,8 +202,8 @@
       "Properties": {
         "VpcId": { "Ref": "VPC" },
         "Tags" : [
-          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "public-route"] ] } },
-          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+          { "Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "public-route"] ] } },
+          { "Key" : "Env", "Value" : {"Ref" : "ENV"} }
         ]
       }
     },
@@ -221,7 +221,7 @@
       }
     },
 
-    "PublicSubnetOneRouteTableAssociation": {
+    "PublicSubnetRouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
         "SubnetId": {
@@ -238,8 +238,8 @@
       "Properties": {
         "VpcId": { "Ref": "VPC" },
         "Tags" : [
-          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "private-route"] ] } },
-          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+          { "Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "private-route"] ] } },
+          { "Key" : "Env", "Value" : {"Ref" : "ENV"} }
         ]
       }
     },
@@ -257,7 +257,7 @@
       }
     },
 
-    "PrivateSubnetOneRouteTableAssociation": {
+    "PrivateSubnetRouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
         "SubnetId": {
@@ -273,11 +273,11 @@
       "Type" : "AWS::EC2::SecurityGroup",
       "Properties" : {
         "Tags" : [
-          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "bastion-sg"] ] } },
-          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+          { "Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "bastion-sg"] ] } },
+          { "Key" : "Env", "Value" : {"Ref" : "ENV"} }
         ],
         "VpcId" : {"Ref" : "VPC"},
-        "GroupDescription" : "Enable SSH, HTTP/S, ICMP access from home",
+        "GroupDescription" : "Enable SSH, ICMP access from home, HTTP/S from anywhere",
         "SecurityGroupIngress" : [
 
           {
@@ -316,8 +316,8 @@
       "Type" : "AWS::EC2::SecurityGroup",
       "Properties" : {
         "Tags" : [
-          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "services-sg"] ] } },
-          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+          { "Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "services-sg"] ] } },
+          { "Key" : "Env", "Value" : {"Ref" : "ENV"} }
         ],
         "VpcId" : {"Ref" : "VPC"},
         "GroupDescription" : "Enable SSH access from Bastion",
@@ -338,11 +338,11 @@
       "Type" : "AWS::EC2::SecurityGroup",
       "Properties" : {
         "Tags" : [
-          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "db-sg"] ] } },
-          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+          { "Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "db-sg"] ] } },
+          { "Key" : "Env", "Value" : {"Ref" : "ENV"} }
         ],
         "VpcId" : {"Ref" : "VPC"},
-        "GroupDescription" : "Enable SSH access from Bastion",
+        "GroupDescription" : "Enable SSH access from Bastion, Services",
         "SecurityGroupIngress" : [
 
           {
@@ -367,8 +367,8 @@
       "Type" : "AWS::EC2::Instance",
       "Properties" : {
         "Tags" : [
-          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "bastion"] ] } },
-          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+          { "Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "bastion"] ] } },
+          { "Key" : "Env", "Value" : {"Ref" : "ENV"} }
         ],
         "InstanceType" : { "Ref" : "BastionInstanceType" },
         "SecurityGroupIds" : [
@@ -378,7 +378,7 @@
         ],
         "KeyName" : { "Ref" : "KeyName" },
         "ImageId" : { "Ref" : "AMIID"  },
-        "AvailabilityZone": {"Ref" : "AvalabilityZone"},
+        "AvailabilityZone": { "Ref" : "AvalabilityZone" },
         "SubnetId": { "Ref" : "PublicSubnet" },
         "Volumes" : [
           {
@@ -393,8 +393,8 @@
       "Type" : "AWS::EC2::Instance",
       "Properties" : {
         "Tags" : [
-          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "services"] ] } },
-          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+          { "Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "services"] ] } },
+          { "Key" : "Env", "Value" : {"Ref" : "ENV"} }
         ],
         "InstanceType" : { "Ref" : "ServicesInstanceType" },
         "SecurityGroupIds" : [
@@ -404,7 +404,7 @@
         ],
         "KeyName" : { "Ref" : "KeyName" },
         "ImageId" : { "Ref" : "AMIID"  },
-        "AvailabilityZone": {"Ref" : "AvalabilityZone"},
+        "AvailabilityZone": { "Ref" : "AvalabilityZone" },
         "SubnetId": { "Ref" : "PrivateSubnet" },
         "Volumes" : [
           {
@@ -419,8 +419,8 @@
       "Type" : "AWS::EC2::Instance",
       "Properties" : {
         "Tags" : [
-          {"Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "db"] ] } },
-          {"Key" : "Env", "Value" : {"Ref" : "ENV"} }
+          { "Key" : "Name", "Value" : { "Fn::Join" : [ "-", [ {"Ref" : "AWS::StackName"}, "db"] ] } },
+          { "Key" : "Env", "Value" : {"Ref" : "ENV"} }
         ],
         "InstanceType" : { "Ref" : "DBInstanceType" },
         "SecurityGroupIds" : [
@@ -430,7 +430,7 @@
         ],
         "KeyName" : { "Ref" : "KeyName" },
         "ImageId" : { "Ref" : "AMIID"  },
-        "AvailabilityZone": {"Ref" : "AvalabilityZone"},
+        "AvailabilityZone": { "Ref" : "AvalabilityZone" },
         "SubnetId": { "Ref" : "PrivateSubnet" },
         "Volumes" : [
           {
@@ -450,7 +450,7 @@
             "AllocationId"
           ]
          },
-        "InstanceId": {"Ref" : "BastionEC2Instance"}
+        "InstanceId": { "Ref" : "BastionEC2Instance" }
       }
     }
 
