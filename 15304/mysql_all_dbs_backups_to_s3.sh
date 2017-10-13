@@ -44,7 +44,7 @@ save_backups () {
 
     cd $BACKUPS_LOCAL_PATH || { echo "ERROR: can't cd to the $BACKUPS_LOCAL_PATH! Exit."; exit 1; }
 
-    # like an accert - if $databases empty - exit
+    # like an assert - if $databases empty - exit
     [[ $databases ]] || exit 1
 
     for db in $databases; do
