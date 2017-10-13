@@ -63,7 +63,7 @@ save_backups () {
 
 echo -e "\nStarting MySQL backup at $(date) to /tmp/\n"
 
-if mysql_all_dbs_backup $MYSQL_ROOT $MYSQL_PASS; then
+if mysql_all_dbs_backup; then
     echo -e "\nLocal backups done."
 else
     echo -e "\nERROR during performing backup! Exit.\n"
