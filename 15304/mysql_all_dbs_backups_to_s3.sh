@@ -48,7 +48,7 @@ save_backups () {
     [[ $databases ]] || exit 1
 
     for db in $databases; do
-        if [[ "$db" != "information_schema" ]] && [[ "$db" != "performance_schema" ]] && [[ "$db" != "mysql" ]] && [[ "$db" != _* ]] && [[ -e "$db"_$BACKUP_NAME ]]; then
+        if [[ "$db" != "information_schema" ]] && [[ "$db" != "performance_schema" ]] && [[ "$db" != "mysql" ]] && [[ "$db" != _* ]]; then
             if [[ -e "$db"_$BACKUP_NAME ]]; then
                 # for testing before run - echo instead of push_to_s3() file instead of rm 
                 # echo "Pushing "$db"_$BACKUP_NAME" && file "$db"_$BACKUP_NAME && echo "Done."
