@@ -9,7 +9,7 @@ AWS_SECRET_ACCESS_KEY=secretkey
 S3_BACKUPS_BUCKET="rtfm-prod-db-backups"
 
 BACKUPS_LOCAL_PATH="/tmp"
-BACKUP_NAME="$(date +"%y_%m_%d").sql.gz"
+BACKUP_DATE="$(date +"%d_%m_%y")"
 
 mysql_all_dbs_backup () {
 
@@ -20,21 +20,22 @@ mysql_all_dbs_backup () {
 
     for db in $databases; do
         if [[ "$db" != "information_schema" ]] && [[ "$db" != "performance_schema" ]] && [[ "$db" != "mysql" ]] && [[ "$db" != _* ]] ; then
-            echo "Dumping database: $db to $BACKUPS_LOCAL_PATH/"$db"_$BACKUP_NAME"
-            mysqldump -u $MYSQL_ROOT -p$MYSQL_PASS --databases $db | gzip > "$db"_$BACKUP_NAME
-            [[ -e "$db"_$BACKUP_NAME ]] && echo "Database $db save to "$db"_$BACKUP_NAME..." || echo "WARNING: can't find $db dump!"
-        fi
+            # e.g. 14_10_17_rtfm_db1.sql.gz
+            local backup_name="$BACKUP_DATE"_$db.sql.gz
+            echo "Dumping database: $db to $BACKUPS_LOCAL_PATH/$backup_name"
+            mysqldump -u $MYSQL_ROOT -p$MYSQL_PASS --databases $db | gzip > $backup_name
+            [[ -e $backup_name ]] && echo "Database $db saved to $backup_name..." || echo "WARNING: can't find $db dump!"
+        fi  
     done
-
 }
 
 push_to_s3 () {
 
-    local dbbackfile=$1
-
-    echo "Uploading file $dbbackfile..."
-    AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY aws s3 cp $dbbackfile s3://$S3_BACKUPS_BUCKET/$dbbackfile
-
+    local backup_name=$1
+   
+    echo "Uploading file $backup_name..."
+    AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY aws s3 cp $backup_name s3://$S3_BACKUPS_BUCKET/$backup_name
+   
 }
 
 save_backups () {
@@ -49,12 +50,14 @@ save_backups () {
 
     for db in $databases; do
         if [[ "$db" != "information_schema" ]] && [[ "$db" != "performance_schema" ]] && [[ "$db" != "mysql" ]] && [[ "$db" != _* ]]; then
-            if [[ -e "$db"_$BACKUP_NAME ]]; then
-                # for testing before run - echo instead of push_to_s3() file instead of rm 
-                # echo "Pushing "$db"_$BACKUP_NAME" && file "$db"_$BACKUP_NAME && echo "Done."
-                push_to_s3 "$db"_$BACKUP_NAME && rm "$db"_$BACKUP_NAME && echo "Done."
+            # e.g. 14_10_17_rtfm_db1.sql.gz
+            local backup_name="$BACKUP_DATE"_$db.sql.gz
+            if [[ -e $backup_name ]]; then
+                # for testing before run - echo instead of push_to_s3() file instead of rm
+                # echo "Pushing $backup_name && file $backup_name && echo "Done."
+                push_to_s3 $backup_name && rm $backup_name && echo "Done."
             else
-                echo "ERROR: can't find local backup file "$db"_$BACKUP_NAME! Exit."
+                echo "ERROR: can't find local backup file $backup_name! Exit."
                 exit 1
             fi
         fi
