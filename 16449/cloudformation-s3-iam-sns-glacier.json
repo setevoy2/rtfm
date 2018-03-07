@@ -1,0 +1,225 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+
+  "Description": "AWS CloudFormation S3 testing stack",
+
+  "Parameters": {
+
+    "BucketName": {
+      "Description": "Bucket name",
+      "Type": "String",
+      "Default": "test-bucket"
+    },
+
+    "ArchiveTransitionInDays": {
+      "Description": "Days before change storage type from Standard to Glacier",
+      "Type": "Number",
+      "Default": 0
+    },
+
+    "ClientTag": {
+      "Description": "Client tag value",
+      "Type": "String",
+      "Default": "TestClient"
+    },
+
+    "TestS3UserPassword": {
+      "Description": "User password",
+      "Type": "String",
+      "NoEcho": "true",
+      "MinLength": "8",
+      "MaxLength": "41",
+      "AllowedPattern" : "[a-zA-Z0-9]*",
+      "ConstraintDescription" : "must contain only alphanumeric characters.",
+      "Default": "iu7aey3YooSh"
+    },
+
+    "NotificationEmail": {
+      "Description": "Email to use for S3 deletion notifications",
+      "Default": "notify@setevoy.kiev.ua",
+      "Type": "String"
+    }
+  },
+
+  "Resources" : {
+
+    "TestSNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "DisplayName": {
+          "Fn::Join": ["", [ "S3Bucket-deletions" ]]
+        },
+        "Subscription": [
+          {
+            "Protocol": "email",
+            "Endpoint": {
+              "Ref": "NotificationEmail"
+            }
+          }
+        ]
+      }
+    },
+
+    "SNSTopicPolicy": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "Properties": {
+        "PolicyDocument": {
+          "Id": "S3BucketPolicy",
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "s3.amazonaws.com"
+              },
+              "Action": [
+                "SNS:Publish"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "ArnLike": {
+                  "aws:SourceArn": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:s3:*:*:",
+                        {
+                          "Ref": "BucketName"
+                        }
+                      ]
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "Topics": [
+          {
+            "Ref": "TestSNSTopic"
+          }
+        ]
+      }
+    },
+
+    "TestS3User" : {
+      "Type" : "AWS::IAM::User",
+      "Properties" : {
+        "LoginProfile": {
+          "Password": { "Ref" : "TestS3UserPassword" }
+        }
+      }
+    },
+
+    "TestS3UserKeys": {
+      "Type": "AWS::IAM::AccessKey",
+      "Properties": {
+        "UserName": {
+          "Ref": "TestS3User"
+        }
+      }
+    },
+
+    "TestS3Group" : {
+      "Type" : "AWS::IAM::Group"
+    },
+
+    "AddTestS3UserToTestS3Group": {
+      "Type": "AWS::IAM::UserToGroupAddition",
+      "Properties": {
+        "GroupName": { "Ref": "TestS3Group" },
+        "Users": [ { "Ref": "TestS3User" } ]
+      }
+    },
+
+    "TestS3Policy": {
+      "Type" : "AWS::IAM::Policy",
+      "Properties" : {
+        "PolicyName" : "TestS3Policy",
+        "PolicyDocument" : {
+          "Statement": [ {
+            "Effect": "Allow",
+            "Action": [
+              "s3:ListBucket"
+            ],
+            "Resource": { "Fn::Join": [ "", [ "arn:aws:s3:::", {"Ref" : "TestS3Bucket"} ]]}
+            },
+            {
+            "Effect": "Allow",
+            "Action": [
+              "s3:PutObject",
+              "s3:GetObject",
+              "s3:DeleteObject"
+            ],
+            "Resource": { "Fn::Join": [ "", [ "arn:aws:s3:::", {"Ref" : "TestS3Bucket"}, "/*" ]]}
+            }
+          ]
+        },
+        "Groups" : [ { "Ref" : "TestS3Group" } ]
+      }
+    },
+
+    "TestS3Bucket" : {
+      "Type" : "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": { "Ref": "BucketName" },
+        "AccessControl": "BucketOwnerFullControl",
+          "NotificationConfiguration": {
+            "TopicConfigurations": [ {
+              "Event": "s3:ObjectRemoved:Delete",
+              "Topic": {
+                "Ref": "TestSNSTopic"
+              }
+            }
+          ]
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "GlacierArchive",
+              "Status": "Enabled",
+              "Transitions": [
+                {
+                  "StorageClass": "GLACIER",
+                  "TransitionInDays": { "Ref": "ArchiveTransitionInDays" }
+                }
+              ]
+            }
+          ]
+        },
+        "Tags" : [
+          {"Key" : "Name", "Value" : { "Fn::Join": [ "-", [ {"Ref" : "AWS::StackName"}, "s3-bucket"] ] } },
+          {"Key" : "Env", "Value" : {"Ref" : "AWS::StackName"} },
+          {"Key" : "Client", "Value" : {"Ref" : "ClientTag"} }
+        ]
+      }
+    }
+  },
+
+  "Outputs": {
+
+    "AccessKey": {
+      "Value": {
+        "Ref": "TestS3UserKeys"
+      },
+      "Description": "Access Key ID of Test S3 User"
+    },
+
+    "SecretKey": {
+      "Value": {
+        "Fn::GetAtt": [
+          "TestS3UserKeys",
+          "SecretAccessKey"
+        ]
+      },
+      "Description": "Secret Key of Test S3 User"
+    },
+
+    "BucketName": {
+      "Value": {
+        "Ref": "TestS3Bucket"
+      }
+    }
+  }
+
+}
