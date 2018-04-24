@@ -10,6 +10,8 @@
 
 13800: [Azure: ARM provisioning и Jenkins в Docker](https://rtfm.co.ua/?p=13800)
 
+13491: [AWS: AWS CLI и  bash - blue/green деплой AutoScale группы за ELB](https://rtfm.co.ua/todo-aws-aws-cli-i-bash-bluegreen-deploj-autoscale-gruppy-za-elb/)
+
 14044: [Azure: CDN, NodeJS, Docker Swarm и Blue-Green деплой](https://rtfm.co.ua/azure-cdn-nodejs-docker-swarm-i-blue-green-deploj/)
 
 14371:	[C: libssh – пример SSH-клиента](https://rtfm.co.ua/c-libssh-primer-ssh-klienta/)
