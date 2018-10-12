@@ -60,8 +60,6 @@ notify "started" $HOME_DIR
 
 if mkbackup $BKP_DIR $HOME_DIR $EXCLUDE_FILE $DRY_RUN $DELETE; then
 	notify "finished" $HOME_DIR
-	echo finished
 else
-	echo failed
 	notify "FAILED" $HOME_DIR
 fi
