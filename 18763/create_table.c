@@ -16,7 +16,7 @@ int main(int argc, char **argv) {
       exit(1);
   }  
 
-  if (mysql_real_connect(con, "cdb-example.setevoy.org.ua", "setevoy", "Heig3Ca7eiCi", 
+  if (mysql_real_connect(con, "cdb-example.setevoy.org.ua", "setevoy", "p@ssw0rd", 
           "testdb", 0, NULL, 0) == NULL) {
       finish_with_error(con);
   }    

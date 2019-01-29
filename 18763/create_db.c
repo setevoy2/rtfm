@@ -10,7 +10,7 @@ int main(int argc, char **argv) {
       exit(1);
   }
 
-  if (mysql_real_connect(con, "cdb-example.setevoy.org.ua", "setevoy", "Heig3Ca7eiCi",
+  if (mysql_real_connect(con, "cdb-example.setevoy.org.ua", "setevoy", "p@ssw0rd",
           NULL, 0, NULL, 0) == NULL) {
       fprintf(stderr, "%s\n", mysql_error(con));
       mysql_close(con);

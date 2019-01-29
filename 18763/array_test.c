@@ -5,7 +5,7 @@
 
 #define DB_HOST "cdb-example.setevoy.org.ua"
 #define DB_USER "setevoy"
-#define DP_PASS "Heig3Ca7eiCi"
+#define DP_PASS "p@ssw0rd"
 #define DB_NAME "testdb"
 #define DB_TABLE "ExampleTable"
 #define TEST "TEST"
